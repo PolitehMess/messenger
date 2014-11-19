@@ -302,11 +302,18 @@ int main(int argc, char **argv)
 
 	connect(sockfd, (SA *) &servaddr, sizeof(servaddr));
 
-std::cout<<"connection"<<std::endl;
+	std::cout<<"connection"<<std::endl;
 	int i=0;
 	Msg k;
 	cout << "enter your name: ";
 	cin >> k.otkogo;
+	//tut peredacha serveru pustogo soobsheniya
+	string nameto="_srv";
+	string message;
+	unsigned char arr[13+k.otkogo.size()+4];
+	pars(k.otkogo,nameto,message,arr);
+	write(sockfd, arr, sizeof(arr));
+
 	cout << "enter name for: ";
 	cin >> k.komu;
 	while(true)
@@ -328,7 +335,7 @@ std::cout<<"connection"<<std::endl;
 		if(m.message.size()!=0)
 			obj.WrToHistory(m,to);
 		else continue;
-		int len=13+m.message.size()+k.otkogo.size()+k.komu.size();
+		int len=13+m.message.size()+m.otkogo.size()+m.komu.size();//m.message.size()+k.otkogo.size()+k.komu.size();
 		unsigned char a[len];
 		pars(m.otkogo,m.komu,m.message,a);
 		write(sockfd, a, sizeof(a));	
