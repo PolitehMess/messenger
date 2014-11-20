@@ -1,13 +1,73 @@
 #include <iostream>
 #include <cstring>
+using namespace std;
+
+struct  Msg
+{
+	string to;
+	string from;
+	string text;
+};
 
 class Message
 {
+	public:
+		Message (Msg in_msg) 
+		{
+			msg = in_msg;
+		}
+
+		Message (string in_from, string in_to, string in_text)
+		{
+			msg.from = in_from;
+			msg.to = in_to;
+			msg.text = in_text;
+		}
+
+		Message (unsigned char * in_protocol_form)
+		{
+			unpack(in_protocol_form);
+		}
+
+		~Message()
+		{}
+
+		string get_from()
+		{
+			return msg.from;
+		}
+
+		string get_to()
+		{
+			return msg.to;
+		}
+
+		string get_text()
+		{
+			return msg.text;
+		}
+
+		Msg get_msg()
+		{
+			return msg;
+		}
+		
+		unsigned char* get_protocol_form()
+		{
+			return pack();
+		}
+
+		Message operator = (Msg const & m)
+		{
+			msg.to=m.to;
+			msg.from=m.from;
+			msg.text=m.text;
+			return msg;
+		}
+
 	private:
-		std::string from;
-		std::string to;
-		std::string text;
-		unsigned char* protocol_form;
+
+		Msg msg;
 
 		void Convert(size_t size, unsigned char *a)
 		{
@@ -24,234 +84,209 @@ class Message
 			return 256*static_cast<size_t>(a[n])+1*static_cast<size_t>(a[n+1]);
 		}
 
-	public:
+		/*
+		 * Баг функции pack()
+		 * Утечка памяти на protocol_form
+		 * мы не вызываем деструктор
+		 * нужен умный указатель на массив с разделенным владением	
+		 */
 
-		Message (std::string in_from,std::string in_to, std::string in_text)
+		unsigned char* pack()
 		{
-			from = in_from;
-			to   = in_to;
-			text = in_text;
+			int length = 13 + msg.to.size() + msg.from.size() + msg.text.size();
+			unsigned char* protocol_form = new unsigned char[length];
 
-			//Создаем протокольное сообщение
-			protocol_form[0] = 1;
-			protocol_form[1] = 0;
-
+			protocol_form[0]=1;
+			protocol_form[1]=0;
 			unsigned char b[2];
-			int num = 9 + from.size() + to.size() + text.size();
+			int num=9+msg.from.size()+msg.to.size()+msg.text.size();
 			Convert(num,b);
-
-			protocol_form[2] = b[0]; //целая часть
-			protocol_form[3] = b[1]; //остаток
-			protocol_form[4] = 1;
-
-			num = from.size();
+			protocol_form[2]=b[0]; //celaya chast'
+			protocol_form[3]=b[1]; //ostatok
+			protocol_form[4]=1;
+			num=msg.from.size();
 			Convert(num,b);
-			protocol_form[5] = b[0];
-			protocol_form[6] = b[1];
-
-			for(size_t i = 7, j = 0; i < 7+from.size(); i++, j++)
+			protocol_form[5]=b[0];
+			protocol_form[6]=b[1];
+			for(size_t i=7, j=0; i<7+msg.from.size();i++, j++)
 			{
-				protocol_form[i] = from[j];
+				protocol_form[i]=msg.from[j];
 			}
-			protocol_form[7 + from.size()] = 0;
-
-			num = to.size();
+			protocol_form[7+msg.from.size()]=0;
+			num=msg.to.size();
 			Convert(num,b);
-			protocol_form[8 + from.size()] = b[0];
-			protocol_form[9 + from.size()] = b[1];
-
-			for(size_t i = 10+from.size(), j = 0; i<10+from.size()+to.size();i++, j++)
+			protocol_form[8+msg.from.size()]=b[0];
+			protocol_form[9+msg.from.size()]=b[1];
+			for(size_t i=10+msg.from.size(), j=0; i<10+msg.from.size()+msg.to.size();i++, j++)
 			{
-				protocol_form[i] = to[j];
+				protocol_form[i]=msg.to[j];
 			}
-			protocol_form[10 + from.size() + to.size()] = 2;
-
-			num = text.size();
+			protocol_form[10+msg.from.size()+msg.to.size()]=2;
+			num=msg.text.size();
 			Convert(num,b);
-			protocol_form[11 + from.size() + to.size()] = b[0];
-			protocol_form[12 + from.size() + to.size()] = b[1];
-			for(size_t i = 13+from.size()+to.size(), j = 0; i<13+from.size()+to.size()+text.size();i++, j++)
+			protocol_form[11+msg.from.size()+msg.to.size()]=b[0];
+			protocol_form[12+msg.from.size()+msg.to.size()]=b[1];
+			for(size_t i=13+msg.from.size()+msg.to.size(), j=0; i<13+msg.from.size()+msg.to.size()+msg.text.size();i++, j++)
 			{
-				protocol_form[i] = text[j];
+				protocol_form[i]=msg.text[j];
 			}
+			return protocol_form;
 		}
 
-		Message (unsigned char* a)
+		void unpack(unsigned char * protocol_form)
 		{
-			protocol_form = a;
-			if(a[0]==1 && a[1]==0)
-			{
-				size_t len=Getlen(a,2);//static_cast<size_t>(a[2]);
-				if(len>9)
+			if(protocol_form[0]==1 && protocol_form[1]==0)
 				{
-					if(a[4]==1)
+					size_t len=Getlen(protocol_form,2);//static_cast<size_t>(protocol_form[2]);
+					if(len>9)
 					{
-						size_t size=Getlen(a,5);//static_cast<size_t>(a[4]);
-						if(size>0)
+						if(protocol_form[4]==1)
 						{
-							char arr[size+1];
-							for(size_t i=7, j=0;i<7+size && j<size ;i++,j++)
-							{
-								arr[j]=a[i];
-							}
-							arr[size]='\0';
-							from=static_cast<std::string>(arr);
-						}
-					}
-					else 
-						if(a[4]==0)
-						{
-							size_t size=Getlen(a,5);//static_cast<size_t>(a[4]);
+							size_t size=Getlen(protocol_form,5);//static_cast<size_t>(protocol_form[4]);
 							if(size>0)
 							{
 								char arr[size+1];
 								for(size_t i=7, j=0;i<7+size && j<size ;i++,j++)
 								{
-									arr[j]=a[i];
+									arr[j]=protocol_form[i];
 								}
 								arr[size]='\0';
-								to=static_cast<std::string>(arr);
+								msg.from=static_cast<string>(arr);
 							}
 						}
-						else
-							if(a[4]==2)
+						else 
+							if(protocol_form[4]==0)
 							{
-								size_t size=Getlen(a,5);//static_cast<size_t>(a[4]);
+								size_t size=Getlen(protocol_form,5);//static_cast<size_t>(protocol_form[4]);
 								if(size>0)
 								{
 									char arr[size+1];
 									for(size_t i=7, j=0;i<7+size && j<size ;i++,j++)
 									{
-									arr[j]=a[i];
+										arr[j]=protocol_form[i];
 									}
 									arr[size]='\0';
-									text=static_cast<std::string>(arr);
+									msg.to=static_cast<string>(arr);
 								}
 							}
-							else throw "Ne podderjivaetsya etot protokol!";
-					if(a[7+Getlen(a,5)]==0)
-					{
-						size_t size=Getlen(a,8+Getlen(a,5));
+							else
+								if(protocol_form[4]==2)
+								{
+									size_t size=Getlen(protocol_form,5);//static_cast<size_t>(protocol_form[4]);
+									if(size>0)
+									{
+										char arr[size+1];
+										for(size_t i=7, j=0;i<7+size && j<size ;i++,j++)
+										{
+										arr[j]=protocol_form[i];
+										}
+										arr[size]='\0';
+										msg.text=static_cast<string>(arr);
+									}
+								}
+								else throw "Ne podderjivaetsya etot protokol!";
+						if(protocol_form[7+Getlen(protocol_form,5)]==0)
 						{
-							char arr[size];
-							for(size_t i=10+Getlen(a,5), j=0;i<10+Getlen(a,5)+size;i++,j++)
-							{
-								arr[j]=a[i];
-							}
-							arr[size]='\0';
-							to=static_cast<std::string>(arr);
-						}
-					}
-					else
-						if(a[7+Getlen(a,5)]==1)
-						{
-							size_t size=Getlen(a,8+Getlen(a,5));
+							size_t size=Getlen(protocol_form,8+Getlen(protocol_form,5));
 							{
 								char arr[size];
-								for(size_t i=10+Getlen(a,5), j=0;i<10+Getlen(a,5)+size;i++,j++)
+								for(size_t i=10+Getlen(protocol_form,5), j=0;i<10+Getlen(protocol_form,5)+size;i++,j++)
 								{
-									arr[j]=a[i];
+									arr[j]=protocol_form[i];
 								}
 								arr[size]='\0';
-								from=static_cast<std::string>(arr);
+								msg.to=static_cast<string>(arr);
 							}
 						}
 						else
-							if(a[7+Getlen(a,5)]==2)
+							if(protocol_form[7+Getlen(protocol_form,5)]==1)
 							{
-								size_t size=Getlen(a,8+Getlen(a,5));
+								size_t size=Getlen(protocol_form,8+Getlen(protocol_form,5));
 								{
 									char arr[size];
-									for(size_t i=10+Getlen(a,5), j=0;i<10+Getlen(a,5)+size;i++,j++)
+									for(size_t i=10+Getlen(protocol_form,5), j=0;i<10+Getlen(protocol_form,5)+size;i++,j++)
 									{
-										arr[j]=a[i];
+										arr[j]=protocol_form[i];
 									}
 									arr[size]='\0';
-									text=static_cast<std::string>(arr);
+									msg.from=static_cast<string>(arr);
 								}
 							}
-							else throw "Ne podderjivaetsya etot protocol";
+							else
+								if(protocol_form[7+Getlen(protocol_form,5)]==2)
+								{
+									size_t size=Getlen(protocol_form,8+Getlen(protocol_form,5));
+									{
+										char arr[size];
+										for(size_t i=10+Getlen(protocol_form,5), j=0;i<10+Getlen(protocol_form,5)+size;i++,j++)
+										{
+											arr[j]=protocol_form[i];
+										}
+										arr[size]='\0';
+										msg.text=static_cast<string>(arr);
+									}
+								}
+								else throw "Ne podderjivaetsya etot protocol";
 
-					if(a[10+Getlen(a,5)+Getlen(a,8+Getlen(a,5))]==2)
-					{
-						size_t size=Getlen(a,11+Getlen(a,5)+Getlen(a,8+Getlen(a,5)));//static_cast<size_t>(a[8+static_cast<size_t>(a[4])+static_cast<size_t>(a[6+static_cast<size_t>(a[4])])]);
-						if(size>0)
+						if(protocol_form[10+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))]==2)
 						{
-							char arr[size];
-							for(size_t i=13+Getlen(a,5)+Getlen(a,8+Getlen(a,5))/*Getlen(a,11+Getlen(a,5)+Getlen(a,8+Getlen(a,5)))*/, j=0;i<13+Getlen(a,5)+Getlen(a,8+Getlen(a,5))+size;i++,j++)
-							{
-								arr[j]=a[i];
-							}
-							arr[size]='\0';
-							text=static_cast<std::string>(arr);
-						}
-					}
-					else
-						if(a[10+Getlen(a,5)+Getlen(a,8+Getlen(a,5))]==1)
-						{
-							size_t size=Getlen(a,11+Getlen(a,5)+Getlen(a,8+Getlen(a,5)));//static_cast<size_t>(a[8+static_cast<size_t>(a[4])+static_cast<size_t>(a[6+static_cast<size_t>(a[4])])]);
+							size_t size=Getlen(protocol_form,11+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5)));//static_cast<size_t>(protocol_form[8+static_cast<size_t>(protocol_form[4])+static_cast<size_t>(protocol_form[6+static_cast<size_t>(protocol_form[4])])]);
 							if(size>0)
 							{
 								char arr[size];
-								for(size_t i=13+Getlen(a,5)+Getlen(a,8+Getlen(a,5))/*Getlen(a,11+Getlen(a,5)+Getlen(a,8+Getlen(a,5)))*/, j=0;i<13+Getlen(a,5)+Getlen(a,8+Getlen(a,5))+size;i++,j++)
+								for(size_t i=13+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))/*Getlen(protocol_form,11+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5)))*/, j=0;i<13+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))+size;i++,j++)
 								{
-									arr[j]=a[i];
+									arr[j]=protocol_form[i];
 								}
 								arr[size]='\0';
-								from=static_cast<std::string>(arr);
+								msg.text=static_cast<string>(arr);
 							}
 						}
-						else 
-							if(a[10+Getlen(a,5)+Getlen(a,8+Getlen(a,5))]==0)
+						else
+							if(protocol_form[10+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))]==1)
 							{
-								size_t size=Getlen(a,11+Getlen(a,5)+Getlen(a,8+Getlen(a,5)));//static_cast<size_t>(a[8+static_cast<size_t>(a[4])+static_cast<size_t>(a[6+static_cast<size_t>(a[4])])]);
+								size_t size=Getlen(protocol_form,11+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5)));//static_cast<size_t>(protocol_form[8+static_cast<size_t>(protocol_form[4])+static_cast<size_t>(protocol_form[6+static_cast<size_t>(protocol_form[4])])]);
 								if(size>0)
 								{
 									char arr[size];
-									for(size_t i=13+Getlen(a,5)+Getlen(a,8+Getlen(a,5))/*Getlen(a,11+Getlen(a,5)+Getlen(a,8+Getlen(a,5)))*/, j=0;i<13+Getlen(a,5)+Getlen(a,8+Getlen(a,5))+size;i++,j++)
+									for(size_t i=13+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))/*Getlen(protocol_form,11+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5)))*/, j=0;i<13+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))+size;i++,j++)
 									{
-										arr[j]=a[i];
+										arr[j]=protocol_form[i];
 									}
 									arr[size]='\0';
-									to=static_cast<std::string>(arr);
+									msg.from=static_cast<string>(arr);
 								}
 							}
-							else throw "Ne podderjivaetsya etot protocol";
+							else 
+								if(protocol_form[10+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))]==0)
+								{
+									size_t size=Getlen(protocol_form,11+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5)));//static_cast<size_t>(protocol_form[8+static_cast<size_t>(protocol_form[4])+static_cast<size_t>(protocol_form[6+static_cast<size_t>(protocol_form[4])])]);
+									if(size>0)
+									{
+										char arr[size];
+										for(size_t i=13+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))/*Getlen(protocol_form,11+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5)))*/, j=0;i<13+Getlen(protocol_form,5)+Getlen(protocol_form,8+Getlen(protocol_form,5))+size;i++,j++)
+										{
+											arr[j]=protocol_form[i];
+										}
+										arr[size]='\0';
+										msg.to=static_cast<string>(arr);
+									}
+								}
+								else throw "Ne podderjivaetsya etot protocol";
+					}
+					else throw "Ne podderjivaetsya etot protocol";
 				}
-				else throw "Ne podderjivaetsya etot protocol";
-			}
-			else throw "ne podderjivaetsya etot protocol";
+				else throw "ne podderjivaetsya etot protocol";
 		}
-
-		std::string get_from()
-		{
-			return from;
-		}
-
-		std::string get_to()
-		{
-			return to;
-		}
-
-		std::string get_text()
-		{
-			return text;
-		}
-
-		unsigned char* get_protocol_form()
-		{
-			return protocol_form;
-		}
-
 };
 
 int main()
 {
-	//тестируем новый код
 	Message msg1 ("Astrid","Eret","Careful what you wish for!");
 	Message msg2 (msg1.get_protocol_form());
 	std::cout << "From: "<<msg2.get_from()<<std::endl;
-	std::cout << "To:"   <<msg2.get_to()  <<std::endl;
-	std::cout << "Text:" <<msg2.get_text()<<std::endl;
+	std::cout << "To:   "<<msg2.get_to()  <<std::endl;
+	std::cout << "Text: "<<msg2.get_text()<<std::endl;
+
 	return 0;
 }
