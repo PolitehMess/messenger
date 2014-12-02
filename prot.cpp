@@ -22,6 +22,11 @@ void Convert(size_t size, char *a)
 	a[1]=mod;
 }
 
+size_t Getlen(char *a,size_t n)
+{
+	return 127*static_cast<size_t>(a[n])+1*static_cast<size_t>(a[n+1]);
+}
+
 void pars(string namefrom,string nameto, string message, char* arr)
 {
 	arr[0]=1;
@@ -70,6 +75,45 @@ void Convert(size_t size, boost::shared_array<char> a)
 	mod=size-127*tmp; 
 	a[0]=tmp;
 	a[1]=mod;
+}
+
+void pack(string namefrom,string nameto, string message, boost::shared_array<char> arr)
+{
+	arr[0]=1;
+	arr[1]=0;
+	boost::shared_array<char> b(new char[2]);
+	int num=9+namefrom.size()+nameto.size()+message.size();
+	Convert(num,b);
+	arr[2]=b[0]; //celaya chast'
+	arr[3]=b[1]; //ostatok
+	arr[4]=1;
+	num=namefrom.size();
+	Convert(num,b);
+	arr[5]=b[0];
+	arr[6]=b[1];
+	for(size_t i=7, j=0; i<7+namefrom.size();i++, j++)
+	{
+		arr[i]=namefrom[j];
+	}
+	arr[7+namefrom.size()]=0;
+	num=nameto.size();
+	Convert(num,b);
+	arr[8+namefrom.size()]=b[0];
+	arr[9+namefrom.size()]=b[1];
+	for(size_t i=10+namefrom.size(), j=0; i<10+namefrom.size()+nameto.size();i++, j++)
+	{
+		arr[i]=nameto[j];
+	}
+	arr[10+namefrom.size()+nameto.size()]=2;
+	num=message.size();
+	Convert(num,b);
+	arr[11+namefrom.size()+nameto.size()]=b[0];
+	arr[12+namefrom.size()+nameto.size()]=b[1];
+	for(size_t i=13+namefrom.size()+nameto.size(), j=0; i<13+namefrom.size()+nameto.size()+message.size();i++, j++)
+	{
+		arr[i]=message[j];
+	}
+	arr[13+namefrom.size()+nameto.size()+message.size()]='\0';
 }
 
 class Error
@@ -266,6 +310,7 @@ private:
 	vector<char> v;
 };
 
+
 int main()
 {
 	string message="message";
@@ -276,8 +321,6 @@ int main()
 	char *a=new char[len];
 	pars(namefrom,nameto,message,a);
 	Parser parser;
-	a[0]=0;
-	
 	try{
 		for(size_t i=0; i<30; ++i)
 		{
@@ -292,7 +335,6 @@ int main()
 	{
 		cerr << "ne podderjivaetsya" << endl;
 	}
-	
 
 	cout << parser.vectlen() << endl;
 	cout<<m.otkogo<<endl;
